@@ -88,8 +88,8 @@ def y_or_n_p(prompt) -> bool:
 def get_time_ms() -> int:
     """Used as a nonce"""
     now = datetime.now(timezone.utc)
-    posix_timestamp_micros = (now - EPOCH) // timedelta(microseconds=1)
-    return posix_timestamp_micros // 1000
+    ptime_ms = (now - EPOCH) // timedelta(microseconds=1)
+    return ptime_ms // 1000
 
 def round_pair(pair: Pair, amt: float) -> float:
     """Round the given pair to its most precise purchasable amount"""
@@ -244,19 +244,21 @@ with open(OUTF, "a") as f:
     sep = "\t"
     cost_basis = Decimal(STATS["fee_amount"]) + Decimal(STATS["price"]) * Decimal(STATS["amount"])
     f.writelines([
-        str(STATS["tid"])          + sep\
-        +STATS["order_id"]         + sep\
-        +str(STATS["timestamp"])   + sep\
-        +str(STATS["timestampms"]) + sep\
-        +STATS["type"]             + sep\
-        +PAIR.name                 + sep\
-        +STATS["price"]            + sep\
-        +STATS["amount"]           + sep\
-        +STATS["fee_currency"]     + sep\
-        +STATS["fee_amount"]       + sep\
-        +str(cost_basis)           + sep\
-        +"\n"
+        sep.join([
+            str(STATS["tid"])
+            ,STATS["order_id"]
+            ,str(STATS["timestamp"])
+            ,str(STATS["timestampms"])
+            ,STATS["type"]
+            ,PAIR.name
+            ,STATS["price"]
+            ,STATS["amount"]
+            ,STATS["fee_currency"]
+            ,STATS["fee_amount"]
+            ,str(cost_basis)
+            ,"\n"])
     ])
+    print("Wrote to log file")
 
 
 # todo
