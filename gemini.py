@@ -20,11 +20,6 @@ from enum import Enum, unique
 from datetime import datetime, timezone, timedelta
 from pprint import pp
 
-if SANDBOX:
-    print("== running in Sandbox Mode ==")
-else:
-    print("== NOT RUNNING IN SANDBOX MODE! ==")
-
 
 # see https://www.gemini.com/fees/api-fee-schedule#section-api-fee-schedule
 USD_PER_YEAR = 100_000
@@ -205,60 +200,74 @@ def get_past_trades_after_timestamp(pair: Pair, ts: str) -> list:
         "request"   : url.payload_request(),
         "symbol"    : pair.name,
         "timestamp" : ts,
+        "limit_trades": 500,
     }
     enc_payload = encrypt(payload)
     sig = sign(enc_payload)
     headers = priv_api_headers(enc_payload, sig, KEY)
     return requests.post(url.full(), data=None, headers=headers).json()
 
+def log_trades(trades: list[dict], path: str) -> bool:
+    """Writes a line to file at path for each trade"""
+    sep = "\t"
+    # write header
+    if not os.path.isfile(path):
+        with open(path, "w+") as f:
+            f.writelines([
+                # transactionid orderid, timestamp, timestamp(ms), type(buy, sell), pair(BTCUSD, etc.)
+                # price, amount, fee_currency (USD), fee_amount, cost_basis(amount * price + fee_amount)
+                sep.join([
+                    "tid", "orderid", "ts", "tsms",
+                    "type", "pair", "price", "amount",
+                    "fee_currency", "fee_amount", "cost_basis",
+                    "\n"])
+            ])
 
+    with open(path, "a") as f:
+        for trade in trades:
+            cost_basis = Decimal(trade["fee_amount"]) + Decimal(trade["price"]) * Decimal(trade["amount"])
+            f.writelines([
+                sep.join([
+                    str(trade["tid"])
+                    ,trade["order_id"]
+                    ,str(trade["timestamp"])
+                    ,str(trade["timestampms"])
+                    ,trade["type"]
+                    ,trade["symbol"]
+                    ,trade["price"]
+                    ,trade["amount"]
+                    ,trade["fee_currency"]
+                    ,trade["fee_amount"]
+                    ,str(cost_basis)
+                    ,"\n"])
+            ])
 
 # main =======================================================================
 
-PAIR = Pair.BTCUSD
+if __name__ == "__main__":
+    if SANDBOX:
+        print("== running in Sandbox Mode ==")
+    else:
+        print("== NOT RUNNING IN SANDBOX MODE! ==")
 
-RESP = make_daily_order(PAIR, USD_PER_DAY, ["fill-or-kill"])
-assert RESP, "No response"
-print("==order response")
-pp(RESP)
-assert not RESP["is_cancelled"], "Order was cancelled"
+    PAIR = Pair.BTCUSD
 
-TRADES = get_past_trades_after_timestamp(PAIR, RESP["timestampms"])
-STATS = TRADES[0] # should only be one trade in stats, ie the one just execed
+    RESP = make_daily_order(PAIR, USD_PER_DAY, ["fill-or-kill"])
+    assert RESP, "No response"
+    print("==order response")
+    pp(RESP)
+    assert not RESP["is_cancelled"], "Order was cancelled"
 
-print("==trade stats")
-pp(STATS)
+    TRADES = get_past_trades_after_timestamp(PAIR, RESP["timestampms"])
+    print("==trade stats")
+    for trade in TRADES:
+        pp(trade)
+    log_trades(TRADES, OUTF)
 
-
-# logging ====================================================================
 
-if not os.path.isfile(OUTF):
-    with open(OUTF, "w+") as f:
-        f.writelines([
-            # transactionid orderid, timestamp, timestamp(ms), type(buy, sell), pair(BTCUSD, etc.)
-            # price, amount, fee_currency (USD), fee_amount, cost_basis(amount * price + fee_amount)
-            "tid\torderid\tts\ttsms\ttype\tpair\tprice\tamount\tfee_currency\tfee_amount\tcost_basis\n"
-        ])
 
-with open(OUTF, "a") as f:
-    sep = "\t"
-    cost_basis = Decimal(STATS["fee_amount"]) + Decimal(STATS["price"]) * Decimal(STATS["amount"])
-    f.writelines([
-        sep.join([
-            str(STATS["tid"])
-            ,STATS["order_id"]
-            ,str(STATS["timestamp"])
-            ,str(STATS["timestampms"])
-            ,STATS["type"]
-            ,PAIR.name
-            ,STATS["price"]
-            ,STATS["amount"]
-            ,STATS["fee_currency"]
-            ,STATS["fee_amount"]
-            ,str(cost_basis)
-            ,"\n"])
-    ])
-    print("Wrote to log file")
+
+
 
 
 # todo
